@@ -1,0 +1,86 @@
+version: "3.9"
+
+services:
+  db:
+    image: postgres:15
+    container_name: dag_db
+    restart: always
+    env_file:
+      - .env
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - backend
+
+  redis:
+    image: redis:7
+    container_name: dag_redis
+    restart: always
+    networks:
+      - backend
+
+  api:
+    build: ./api
+    container_name: dag_api
+    command: uvicorn main:app --host 0.0.0.0 --port 8000 --reload
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env
+    environment:
+      # NEW: Ensure logs show up immediately
+      - PYTHONUNBUFFERED=1
+    volumes:
+      - ./api:/app
+      - ./core:/app/core
+      - ./uploads:/app/uploads
+    depends_on:
+      - db
+      - redis
+    networks:
+      - backend
+
+  scheduler:
+    build: ./scheduler
+    container_name: dag_scheduler
+    command: python scheduler.py
+    restart: always
+    env_file:
+      - .env
+    environment:
+      # NEW: Ensure logs show up immediately
+      - PYTHONUNBUFFERED=1
+    volumes:
+      - ./scheduler:/app
+      - ./core:/app/core
+    depends_on:
+      - db
+      - redis
+    networks:
+      - backend
+
+  worker:
+    build: ./worker
+    container_name: dag_worker
+    command: python worker.py
+    restart: always
+    env_file:
+      - .env
+    environment:
+      # NEW: Ensure logs show up immediately
+      - PYTHONUNBUFFERED=1
+    volumes:
+      - ./worker:/app
+      - ./core:/app/core
+      - ./uploads:/app/uploads
+    depends_on:
+      - db
+      - redis
+    networks:
+      - backend
+
+networks:
+  backend:
+
+volumes:
+  postgres_data:
